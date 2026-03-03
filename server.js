@@ -12,6 +12,7 @@ const server = http.createServer((req, res) => {
     console.error('Request error:', err.message);
     if (!res.headersSent) {
       res.statusCode = 400;
+      res.setHeader('Content-Type', 'text/plain');
       res.end('Bad Request\n');
     }
   });
@@ -54,6 +55,8 @@ server.on('error', (err) => {
 
 // Root Cause 2 fix: Client error handler
 server.on('clientError', (err, socket) => {
+  // ECONNRESET means the client already disconnected, so no response is possible or needed.
+  // !socket.writable guards against attempting to write to an already-closed/destroyed socket.
   if (err.code === 'ECONNRESET' || !socket.writable) {
     return;
   }
