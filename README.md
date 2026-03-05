@@ -31,7 +31,7 @@
 Key characteristics:
 
 - **Zero external dependencies** — relies solely on the Node.js built-in `http` module
-- **Single-file runtime** — all server logic resides in `server.js` (14 lines)
+- **Single-file runtime** — all server logic resides in `server.js` (11 lines of runtime code, 47 lines total with documentation)
 - **Deterministic responses** — returns an identical `200 OK` response for every request regardless of HTTP method or path
 
 ## Prerequisites
@@ -152,7 +152,7 @@ Hello, World!
 
 | File | Description |
 |------|-------------|
-| `server.js` | HTTP server runtime — contains all server logic (14 lines) |
+| `server.js` | HTTP server runtime — contains all server logic (11 lines of runtime code, 47 lines total with documentation) |
 | `README.md` | Project documentation (this file) |
 | `package.json` | npm package manifest — defines project metadata and scripts |
 | `package-lock.json` | Dependency lock file — confirms an empty dependency graph |
