@@ -145,9 +145,9 @@ That string is produced by the `console.log` template literal at `server.js:114`
 
 The server runs in the **foreground**: the `node` process blocks on the active TCP listener and does not return control to the shell until the process is terminated. To stop the server, press **`Ctrl+C`** in the terminal where it is running.
 
-> **Other launch commands do not work.** The following commands are commonly tried but are not viable in this project:
+> **Alternative launch commands and their actual behavior.** The following commands are commonly tried; each behaves as described:
 >
-> - `npm start` — fails with `npm error Missing script: "start"` because `package.json` declares no `start` script. Use `node server.js` directly.
+> - `npm start` — **also works** in this project, even though `package.json` declares no `start` script. Per the documented npm CLI behavior, when no `start` script is defined and a file named `server.js` exists in the package root, npm runs `node server.js` automatically. This default applies to npm 7.0.9 and newer (so it applies for any environment that meets the [Prerequisites](#prerequisites) requirement of npm 7+). The output is identical to `node server.js`, prefixed only by npm's standard `> hello_world@1.0.0 start` and `> node server.js` banner lines. This README uses `node server.js` for explicitness, but `npm start` is equivalent for this repository.
 > - `npm test` — intentionally fails. The `scripts.test` entry in `package.json` is the npm-default placeholder `echo "Error: no test specified" && exit 1`, which exits with status `1`. There is no test infrastructure.
 > - `require('hello_world')` (programmatic import) — fails because `package.json`'s `main` field references `index.js`, but no file named `index.js` exists in the repository. This is documented as Known Inconsistency [KI-002](#known-inconsistencies).
 
@@ -371,7 +371,7 @@ Try other methods and paths (`PUT`, `DELETE`, `/some/deep/path`, etc.) and you w
 | Symptom | Cause | Resolution |
 | --- | --- | --- |
 | `Error: listen EADDRINUSE: address already in use 127.0.0.1:3000` | Another process is already bound to TCP port `3000`. | Identify and stop the holder: `lsof -i :3000` (macOS / Linux) or `netstat -ano \| findstr :3000` (Windows), then terminate that process. Alternatively, change `const port = 3000;` in `server.js` to a free port and restart. |
-| `npm ERR! Missing script: "start"` after running `npm start` | `package.json` declares no `start` script. | Use `node server.js` directly. |
+| `npm start` produces output (and a running server) even though `package.json` defines no `start` script | This is the documented npm CLI default: when no `start` script is defined, npm runs `node server.js` if a file by that name exists in the package root (npm 7.0.9+). | Expected behavior; no action required. The server is running. Press `Ctrl+C` to stop. To make the launch path explicit, you may add a `"start": "node server.js"` entry to `package.json` — this is a manifest change outside the scope of this documentation deliverable. |
 | `npm test` exits with status `1` and prints `Error: no test specified` | `scripts.test` in `package.json` is the npm-default placeholder `echo "Error: no test specified" && exit 1`. There is no test infrastructure. | This is intentional. To run the server, use `node server.js`. See Known Inconsistency [KI-002](#known-inconsistencies). |
 | `Cannot find module 'hello_world'` when running `require('hello_world')` | `package.json`'s `main` field references `index.js`, but no `index.js` file exists in the repository. | This is documented as Known Inconsistency [KI-002](#known-inconsistencies). The project is not designed for programmatic import; run it as a standalone script via `node server.js`. |
 | `require('http')` fails or `http` module is missing | Extremely unlikely — the `http` module is part of every Node.js distribution. | Verify your Node.js installation with `node --version`. Reinstall Node.js if the result is empty or shows a corrupted version. |
@@ -398,12 +398,12 @@ hao-backprop-test/
 
 ## Known Inconsistencies
 
-The following discrepancies between repository identity, package metadata, and runtime behavior are documented but intentionally **NOT corrected**, in keeping with the project's role as a stable test fixture. Surfacing them here ensures that consumers are not surprised when, for example, `npm start` fails or `require('hello_world')` does not resolve.
+The following discrepancies between repository identity, package metadata, and runtime behavior are documented but intentionally **NOT corrected**, in keeping with the project's role as a stable test fixture. Surfacing them here ensures that consumers are not surprised when, for example, `require('hello_world')` does not resolve or the npm package name (`hello_world`) differs from the repository name (`hao-backprop-test`).
 
 | ID | Description | Source | Impact |
 | --- | --- | --- | --- |
 | **KI-001** | Package name vs. repository name mismatch: `package.json` declares `name: "hello_world"` while the repository identity (and the title of this README) is `hao-backprop-test`. | `package.json` (`name` field) vs. `README.md` H1 | Cosmetic. Downstream consumers must use the correct name in each context — `hello_world` for npm-related operations, `hao-backprop-test` for repository-level references. |
-| **KI-002** | Broken entry point: `package.json` declares `main: "index.js"`, but no file named `index.js` exists in the repository. | `package.json` (`main` field) | `require('hello_world')` will fail with `Cannot find module`. `npm start` has no script to run. The runtime entry point is `server.js`; launch the server with `node server.js`. |
+| **KI-002** | Broken entry point: `package.json` declares `main: "index.js"`, but no file named `index.js` exists in the repository. | `package.json` (`main` field) | `require('hello_world')` will fail with `Cannot find module`. The runtime entry point is `server.js`; launch the server with `node server.js`. (Note: `npm start` still works in spite of this mismatch because npm 7+ falls back to running `node server.js` automatically when no `start` script is declared and a `server.js` file is present — see [Running the Server](#running-the-server) for details.) |
 | **KI-003** | Description variance: `package.json`'s `description` field reads `"Hello world in Node.js"` while this README and the project's stated purpose describe it as a test project for Backprop integration. | `package.json` (`description`) vs. `README.md` | Cosmetic. The README's framing is the authoritative project purpose; `package.json`'s description has not been updated to reflect the project's role as a test fixture. |
 
 ## Author
