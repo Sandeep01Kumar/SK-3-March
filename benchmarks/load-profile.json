@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "name": "hello_world baseline load profile",
+    "description": "Concurrency ladder and request mix for ../server.js measurement. See docs/performance/03-load-profile-and-methodology.md.",
+    "target_url": "http://127.0.0.1:3000/",
+    "request_method": "GET",
+    "request_path": "/",
+    "request_mix": "GET / only",
+    "reporting_fields": [
+      "latency_p50_ms",
+      "latency_p95_ms",
+      "latency_p99_ms",
+      "latency_p99_9_ms",
+      "rps",
+      "throughput_bytes_per_sec",
+      "non_2xx_count"
+    ],
+    "warmup_discard_seconds": 10,
+    "inter_rung_quiesce_seconds": 2
+  },
+  "scenarios": [
+    {
+      "name": "c1",
+      "connections": 1,
+      "duration": 30,
+      "warmup": 10,
+      "expected_min_samples": 1000,
+      "notes": "single-connection baseline; isolates per-request latency from concurrency effects"
+    },
+    {
+      "name": "c10",
+      "connections": 10,
+      "duration": 30,
+      "warmup": 10,
+      "expected_min_samples": 10000,
+      "notes": "low concurrency; representative of light interactive load"
+    },
+    {
+      "name": "c100",
+      "connections": 100,
+      "duration": 30,
+      "warmup": 10,
+      "expected_min_samples": 100000,
+      "notes": "mid-tier concurrency; typical sustained service load"
+    },
+    {
+      "name": "c1000",
+      "connections": 1000,
+      "duration": 30,
+      "warmup": 10,
+      "expected_min_samples": 100000,
+      "notes": "high concurrency; tests TCP listen-backlog (default 511 per node http.Server) and FD limits"
+    }
+  ]
+}
