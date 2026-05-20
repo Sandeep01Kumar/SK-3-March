@@ -10,21 +10,21 @@ This folder contains the comprehensive performance analysis of the `hao-backprop
 
 ## Chapter Map
 
-| Chapter | File | Topic |
-|---------|------|-------|
-| — | [README.md](./README.md) | Index and reader's guide (this file) |
-| 00 | [00-executive-summary.md](./00-executive-summary.md) | Headline findings; populated last |
-| 01 | [01-baseline-characterization.md](./01-baseline-characterization.md) | Per-line walk-through of `[server.js:L1-L14]` |
-| 02 | [02-workflow-gap-analysis.md](./02-workflow-gap-analysis.md) | Canonical PRESENT/ABSENT record for the user-named workflows |
-| 03 | [03-load-profile-and-methodology.md](./03-load-profile-and-methodology.md) | Concurrency ladder, durations, sample sizes, warm-up policy |
-| 04 | [04-cpu-and-memory-profile.md](./04-cpu-and-memory-profile.md) | V8 CPU profile and heap profile findings |
-| 05 | [05-latency-and-throughput.md](./05-latency-and-throughput.md) | Latency histograms and RPS curves |
-| 06 | [06-event-loop-and-concurrency.md](./06-event-loop-and-concurrency.md) | Event-loop lag and concurrent-connection behavior |
-| 07 | [07-network-latency.md](./07-network-latency.md) | Loopback RTT and TCP listen-backlog characterization |
-| 08 | [08-caching-analysis.md](./08-caching-analysis.md) | HTTP-level caching opportunities (advisory) |
-| 09 | [09-optimization-recommendations.md](./09-optimization-recommendations.md) | Tagged recommendations (READY / ADVISORY-Cxxx) |
-| 10 | [10-scalability-assessment.md](./10-scalability-assessment.md) | Concurrent-user scaling posture |
-| 11 | [11-observability-recommendations.md](./11-observability-recommendations.md) | Advisory instrumentation guidance |
+| Chapter | Title | File | Purpose |
+|---------|-------|------|---------|
+| — | Performance Analysis — Index and Reader's Guide | [README.md](./README.md) | Chapter map, reproduction instructions, tagging conventions, and governance constraints (this file) |
+| 00 | Executive Summary | [00-executive-summary.md](./00-executive-summary.md) | Headline findings, baseline numbers (mirrored from chapter 05), top READY/ADVISORY recommendations; populated last |
+| 01 | Baseline Characterization | [01-baseline-characterization.md](./01-baseline-characterization.md) | Per-line walk-through of `[server.js:L1-L14]`; hot-path identification; zero-dependency posture |
+| 02 | Workflow Gap Analysis | [02-workflow-gap-analysis.md](./02-workflow-gap-analysis.md) | Canonical PRESENT/ABSENT record for the seven user-named workflows; every other chapter defers to this one |
+| 03 | Load Profile and Methodology | [03-load-profile-and-methodology.md](./03-load-profile-and-methodology.md) | Concurrency ladder, durations, sample sizes, warm-up policy, reporting fields, environmental recording |
+| 04 | CPU and Memory Profile | [04-cpu-and-memory-profile.md](./04-cpu-and-memory-profile.md) | V8 CPU profile and heap profile findings; flame graph interpretation; retained-size analysis |
+| 05 | Latency and Throughput | [05-latency-and-throughput.md](./05-latency-and-throughput.md) | Latency histograms (p50/p95/p99/p99.9), RPS curves, saturation analysis, SLA verdict — primary data-presentation chapter |
+| 06 | Event Loop and Concurrency | [06-event-loop-and-concurrency.md](./06-event-loop-and-concurrency.md) | Event-loop lag distribution, concurrent-connection behavior, backlog saturation observations |
+| 07 | Network Latency | [07-network-latency.md](./07-network-latency.md) | Loopback RTT baseline, TCP listen-backlog characterization, kernel tunable advisories |
+| 08 | Caching Analysis | [08-caching-analysis.md](./08-caching-analysis.md) | HTTP-level caching opportunities (ETag, Cache-Control, conditional GET); proxy-side caching options |
+| 09 | Optimization Recommendations | [09-optimization-recommendations.md](./09-optimization-recommendations.md) | Tagged recommendations (READY / ADVISORY-C001 / ADVISORY-C002 / ADVISORY-C003 / ADVISORY-C004) — canonical recommendation inventory |
+| 10 | Scalability Assessment | [10-scalability-assessment.md](./10-scalability-assessment.md) | Concurrent-user scaling posture, single-threaded event-loop limits, horizontal/vertical scaling prerequisites |
+| 11 | Observability Recommendations | [11-observability-recommendations.md](./11-observability-recommendations.md) | Advisory instrumentation guidance: structured logging, `/metrics`, OpenTelemetry — all ADVISORY |
 
 The chapter numbering (00–11) is canonical and matches the AAP's §0.6.1 "File-by-File Execution Plan" — it must not be altered, renumbered, or reordered. Cross-references throughout the chapters assume this ordering.
 

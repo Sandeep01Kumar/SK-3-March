@@ -8,14 +8,29 @@ The application under analysis is the 14-line static-response HTTP server define
 
 ## Baseline Numbers
 
-The table below records the per-rung HTTP latency and throughput as measured by `autocannon` over the concurrency ladder defined in [03-load-profile-and-methodology.md](./03-load-profile-and-methodology.md). All cells are copied verbatim from [05-latency-and-throughput.md](./05-latency-and-throughput.md); cells marked `<TBD on first run>` are pending the first invocation of [`../../benchmarks/run-baseline.sh`](../../benchmarks/run-baseline.sh) on the target host (per [05-latency-and-throughput.md](./05-latency-and-throughput.md) "Latency by Concurrency" and "Throughput by Concurrency").
+The two tables below record the per-rung HTTP latency and throughput as measured by `autocannon` over the concurrency ladder defined in [03-load-profile-and-methodology.md](./03-load-profile-and-methodology.md). The schemas of both tables are identical to chapter 05's "Latency by Concurrency" and "Throughput by Concurrency" tables — same column sets, same column ordering, same semantics — so the executive summary preserves chapter 05's canonical presentation rather than imposing a divergent one (per AAP §0.6.4 "Documentation consistency needs" and [05-latency-and-throughput.md](./05-latency-and-throughput.md) "All numbers in this chapter are sourced from the four `autocannon-{1,10,100,1000}.json` files"). All cells are copied verbatim from [05-latency-and-throughput.md](./05-latency-and-throughput.md); cells marked `<TBD on first run>` are pending the first invocation of [`../../benchmarks/run-baseline.sh`](../../benchmarks/run-baseline.sh) on the target host.
 
-| Concurrency | RPS | p50 (ms) | p95 (ms) | p99 (ms) | p99.9 (ms) | Bytes/sec | Non-2xx |
-|-------------|-----|----------|----------|----------|------------|-----------|---------|
-| 1    | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
-| 10   | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
-| 100  | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
-| 1000 | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+### Latency by Concurrency
+
+Mirrors [05-latency-and-throughput.md](./05-latency-and-throughput.md) "Latency by Concurrency". Latency values are rendered to two decimal places of a millisecond per chapter 05's convention; the **Requests** column counts the total samples in the measured window (autocannon's `requests.total`), and **p50/p95/p99/p99.9** map to the `latency_p{50,95,99,99_9}_ms` canonical fields in `meta.reporting_fields` per [`../../benchmarks/load-profile.json`](../../benchmarks/load-profile.json). **Max**, **Mean**, and **StdDev** are autocannon-default fields retained from chapter 05 for context.
+
+| Concurrency | Requests | p50 (ms) | p95 (ms) | p99 (ms) | p99.9 (ms) | Max (ms) | Mean (ms) | StdDev (ms) |
+|-------------|----------|----------|----------|----------|------------|----------|-----------|-------------|
+| 1           | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+| 10          | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+| 100         | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+| 1000        | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+
+### Throughput by Concurrency
+
+Mirrors [05-latency-and-throughput.md](./05-latency-and-throughput.md) "Throughput by Concurrency". **Duration** is recorded explicitly per row because the rung definitions in [`../../benchmarks/load-profile.json`](../../benchmarks/load-profile.json) all set `duration: 30` but the actual measured duration realized by autocannon may differ by a few hundred milliseconds at the upper rungs. **RPS** maps to the `rps` canonical field in `meta.reporting_fields`; **Throughput (MB/s)** maps to `throughput_bytes_per_sec` normalized to mebibytes per second per chapter 05's convention; **Non-2xx** maps to `non_2xx_count`; and **Errors** captures autocannon's combined timeout and socket-error counts.
+
+| Concurrency | Duration (s) | Requests | RPS | Throughput (MB/s) | Non-2xx | Errors |
+|-------------|--------------|----------|-----|-------------------|---------|--------|
+| 1           | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+| 10          | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+| 100         | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
+| 1000        | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` | `<TBD on first run>` |
 
 Saturation point: `<TBD on first run; see chapter 05 "RPS Curve and Saturation">`. The saturation criterion adopted by chapter 05 is "RPS plateaus (next-higher rung within ±5%) OR p99 latency more than doubles relative to the next-lower rung"; the implementing operator records which criterion half triggers and at which rung, once the harness has run on the target host.
 

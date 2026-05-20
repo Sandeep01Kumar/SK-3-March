@@ -53,7 +53,13 @@
 #   autocannon-<N>.json        per-rung machine-readable load-generator report
 #                              (one file per concurrency rung in the ladder)
 #   run-manifest.json          run metadata (timestamp, node version, platform,
-#                              scenarios that ran, produced filenames)
+#                              host, port, url, server script, results dir,
+#                              load profile, ulimit_n, autocannon_version,
+#                              scenarios that ran, produced filenames). The
+#                              ulimit_n and autocannon_version fields are
+#                              canonical environmental metadata per
+#                              docs/performance/05-latency-and-throughput.md
+#                              ("Data Sources").
 #   server.stdout.log          captured stdout of the server (the single
 #                              startup log line per [server.js:L13])
 #   server.stderr.log          captured stderr of the server (empty unless
@@ -156,15 +162,20 @@ if [ "$port_in_use" -eq 1 ]; then
   exit 3
 fi
 
-# ulimit -n soft warning. The c1000 rung opens 1000 simultaneous outbound
+# ulimit -n soft warning. The c=1000 rung opens 1000 simultaneous outbound
 # sockets plus the listening accept queue; if the soft FD limit is below
-# 4096 the kernel will refuse new sockets and the rung's measurements will
-# be skewed by EMFILE/EAGAIN, NOT by the server's actual capacity. We warn
-# but do not exit — the operator may legitimately want to run a degraded
-# c1000 rung to characterize FD-saturation behavior.
+# 65535 the kernel may refuse new sockets and the rung's measurements will
+# be skewed by EMFILE/EAGAIN, NOT by the server's actual capacity. The
+# 65535 threshold matches the canonical FD-pressure recommendation
+# documented as R2 in docs/performance/00-executive-summary.md and
+# docs/performance/09-optimization-recommendations.md ("Raise the process
+# file-descriptor limit before measurement"). We warn but do not exit —
+# the operator may legitimately want to run a degraded c=1000 rung to
+# characterize FD-saturation behavior, or may be running only the
+# lower-concurrency rungs where the soft limit is non-binding.
 ULIMIT_NOFILE=$(ulimit -n 2>/dev/null || echo 0)
-if [ "$ULIMIT_NOFILE" != "unlimited" ] && [ "$ULIMIT_NOFILE" -lt 4096 ] 2>/dev/null; then
-  echo "WARNING: ulimit -n is $ULIMIT_NOFILE (< 4096). The 1000-connection rung may" >&2
+if [ "$ULIMIT_NOFILE" != "unlimited" ] && [ "$ULIMIT_NOFILE" -lt 65535 ] 2>/dev/null; then
+  echo "WARNING: ulimit -n is $ULIMIT_NOFILE (< 65535). The 1000-connection rung may" >&2
   echo "         saturate file descriptors. Consider raising with: ulimit -n 65535" >&2
 fi
 
@@ -368,6 +379,20 @@ NODE_VERSION="$(node --version)"
 PLATFORM_INFO="$(uname -srm)"
 MANIFEST_FILE="$RESULTS_DIR/run-manifest.json"
 
+# Resolve the installed autocannon version from its package metadata. This
+# is a non-mutating read of the harness's own node_modules/ (the package
+# is guaranteed to be present at this point in the script: the pre-flight
+# check at L120-L123 above verified $AUTOCANNON_BIN is executable, and
+# `npm install` is the only way to populate it). Reading the version from
+# package.json — rather than parsing `autocannon --version` stdout —
+# avoids spawning an extra process and is deterministic across autocannon
+# major versions whose --version output format might change. The fallback
+# string "unknown" is emitted only if the package.json is unexpectedly
+# missing or unparseable, which would itself indicate a broken install.
+# Recorded in the manifest as the load-bearing reproducibility field per
+# docs/performance/05-latency-and-throughput.md ("Data Sources").
+AUTOCANNON_VERSION="$(node -e 'try { process.stdout.write(require(process.argv[1]).version); } catch (e) { process.stdout.write("unknown"); }' "$BENCH_DIR/node_modules/autocannon/package.json" 2>/dev/null || echo unknown)"
+
 # Build space-separated lists of scenarios that ran and produced filenames.
 # Bash array expansion under `set -u` requires the ${arr[@]:-} guard when
 # the array may be empty, though here we've already exited if no scenarios
@@ -391,6 +416,8 @@ node -e '
     loadProfilePath,
     scenariosStr,
     resultFilesStr,
+    ulimitN,
+    autocannonVersion,
   ] = process.argv;
   const scenarios = scenariosStr
     .split(/\s+/)
@@ -400,6 +427,19 @@ node -e '
       return { connections, duration, warmup };
     });
   const resultFiles = resultFilesStr.split(/\s+/).filter(Boolean);
+  // ulimit_n is preserved as-is to retain the string "unlimited" when the
+  // shell reports an unbounded soft FD limit; numeric values are coerced
+  // via Number() and only emitted as numbers when the coercion is finite.
+  // This keeps the canonical environmental record honest about what the
+  // shell reported, per docs/performance/05-latency-and-throughput.md
+  // ("Data Sources").
+  let ulimitNField;
+  if (ulimitN === "unlimited") {
+    ulimitNField = "unlimited";
+  } else {
+    const n = Number(ulimitN);
+    ulimitNField = Number.isFinite(n) && n >= 0 ? n : ulimitN;
+  }
   const manifest = {
     timestamp,
     node_version: nodeVersion,
@@ -410,6 +450,8 @@ node -e '
     server_script: serverScript,
     results_dir: resultsDir,
     load_profile: loadProfilePath,
+    ulimit_n: ulimitNField,
+    autocannon_version: autocannonVersion,
     scenarios,
     result_files: resultFiles,
     notes: "Latency/throughput baseline produced by benchmarks/run-baseline.sh. Per-rung autocannon JSON reports are consumed by docs/performance/05-latency-and-throughput.md. The application server was launched unprofiled (no --cpu-prof / --heap-prof / --inspect flags) so these numbers represent the canonical baseline; the profiling scripts produce interpretive numbers, not baseline numbers.",
@@ -427,7 +469,9 @@ node -e '
   "$RESULTS_DIR" \
   "$LOAD_PROFILE" \
   "$SCENARIOS_STR" \
-  "$RESULT_FILES_STR"
+  "$RESULT_FILES_STR" \
+  "$ULIMIT_NOFILE" \
+  "$AUTOCANNON_VERSION"
 
 echo "Manifest: $MANIFEST_FILE"
 echo ""
