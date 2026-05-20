@@ -1,0 +1,22 @@
+{
+  "name": "bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Performance benchmark harness for ../server.js. See AAP §0.4 and benchmarks/README.md.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "baseline": "./run-baseline.sh",
+    "profile:cpu": "./profile-cpu.sh",
+    "profile:heap": "./profile-heap.sh",
+    "measure:elag": "./measure-event-loop-lag.sh",
+    "test": "echo 'No automated tests in the harness; this is a measurement tool. See README.md.' && exit 0"
+  },
+  "devDependencies": {
+    "autocannon": "^8.0.0",
+    "clinic": "^13.0.0",
+    "0x": "^6.0.0"
+  }
+}
