@@ -15,8 +15,6 @@
     "test": "echo 'No automated tests in the harness; this is a measurement tool. See README.md.' && exit 0"
   },
   "devDependencies": {
-    "autocannon": "^8.0.0",
-    "clinic": "^13.0.0",
-    "0x": "^6.0.0"
+    "autocannon": "^7.15.0"
   }
 }

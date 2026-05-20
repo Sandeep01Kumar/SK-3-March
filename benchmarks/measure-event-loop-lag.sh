@@ -134,11 +134,32 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 2
 fi
 
-# Port availability: a successful HTTP response means SOMETHING is already bound.
-# Note that curl exit 7 (couldn't connect) is the success case for this check.
-if curl --silent --output /dev/null --max-time 1 "$URL" 2>/dev/null; then
-  echo "ERROR: Port $PORT appears to be in use (got an HTTP response from $URL)." >&2
-  echo "       Stop the process bound to port $PORT and retry." >&2
+# Port-availability check (mirror profile-heap.sh / run-baseline.sh strategy):
+# Try lsof first, then ss, then fall back to a node TCP connect probe. A bare
+# HTTP GET against the URL is NOT sufficient — a non-HTTP listener, a TCP
+# listener that accepts but never speaks HTTP, or a slow listener would cause
+# curl to fail/timeout and we would falsely conclude the port is free, then
+# the server launch below would crash with EADDRINUSE. Detect *any* listener
+# on the port — HTTP or not — before launching the server.
+port_in_use=0
+if command -v lsof >/dev/null 2>&1; then
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    port_in_use=1
+  fi
+elif command -v ss >/dev/null 2>&1; then
+  if ss -ltn "sport = :${PORT}" 2>/dev/null | grep -q LISTEN; then
+    port_in_use=1
+  fi
+else
+  # Final fallback — attempt a TCP connect; success means something is listening.
+  if node -e "const s=require('net').connect({host:'${HOST}',port:${PORT}}); s.on('connect',()=>{s.destroy();process.exit(0)}); s.on('error',()=>process.exit(1));" >/dev/null 2>&1; then
+    port_in_use=1
+  fi
+fi
+
+if [ "$port_in_use" -eq 1 ]; then
+  echo "ERROR: Port $PORT is already in use. Stop the existing process before running this script." >&2
+  echo "       Assumption A-002 (AAP §0.7) — a second instance fails with EADDRINUSE." >&2
   exit 3
 fi
 
