@@ -53,18 +53,18 @@ Each script in this directory is documented below. All scripts are designed to b
 ### `profile-cpu.sh` — V8 CPU profile capture
 
 - **Command:** `./profile-cpu.sh`
-- **Purpose:** Launches `node --cpu-prof ../server.js` so the V8 CPU profiler is attached for the lifetime of the process, drives sustained load via `autocannon`, then sends `SIGINT` to the server so V8 flushes the profile to disk.
-- **Output:** `results/<timestamp>/CPU.<pid>.<timestamp>.cpuprofile` (the filename is emitted by V8; the script collects whatever `*.cpuprofile` files V8 writes into the timestamped results directory).
+- **Purpose:** Launches `node --inspect=127.0.0.1:9229 ../server.js` (exposing the V8 Inspector socket on the loopback interface), runs the `inspector-driver.mjs` helper which uses the V8 Chrome DevTools Protocol (`Profiler.enable` → `Profiler.start` → `Profiler.stop`) to capture a CPU profile, drives sustained load via `autocannon` in parallel, then asks the inspected process to exit cleanly via `Runtime.evaluate(process.exit(0))`. The driver writes the captured profile data to disk; the script verifies a non-empty `.cpuprofile` was produced and exits non-zero (code 5) if not.
+- **Output:** `results/<timestamp>/CPU.<YYYYMMDD>.<HHMMSS>.<server_pid>.0.001.cpuprofile` (filename pattern matches V8's `--cpu-prof` default so downstream tooling globbing for `CPU.*.cpuprofile` keeps working). The driver's own log lands at `results/<timestamp>/inspector-driver.log`.
 - **Inspection:** Open the `.cpuprofile` in Chrome DevTools (`chrome://inspect` → Performance → Load) or in Speedscope (`https://www.speedscope.app/`).
-- **Approximate duration:** ~45 seconds.
+- **Approximate duration:** ~35 seconds.
 
 ### `profile-heap.sh` — V8 heap profile capture
 
 - **Command:** `./profile-heap.sh`
-- **Purpose:** Launches `node --heap-prof ../server.js` so the V8 sampling heap profiler is attached for the lifetime of the process, drives sustained load via `autocannon`, then sends `SIGINT` to the server so V8 flushes the profile to disk.
-- **Output:** `results/<timestamp>/Heap.<pid>.<timestamp>.heapprofile` (the filename is emitted by V8).
-- **Inspection:** Open the `.heapprofile` in Chrome DevTools (Memory tab → Load profile) or Speedscope.
-- **Approximate duration:** ~45 seconds.
+- **Purpose:** Launches `node --inspect=127.0.0.1:9229 ../server.js` (exposing the V8 Inspector socket on the loopback interface), runs the `inspector-driver.mjs` helper which uses the V8 Chrome DevTools Protocol (`HeapProfiler.startSampling` → `HeapProfiler.stopSampling`) to capture a sampling heap profile, drives sustained load via `autocannon` in parallel, then asks the inspected process to exit cleanly via `Runtime.evaluate(process.exit(0))`. The driver writes the captured profile data to disk; the script verifies a non-empty `.heapprofile` was produced and exits non-zero (code 5) if not.
+- **Output:** `results/<timestamp>/Heap.<YYYYMMDD>.<HHMMSS>.<server_pid>.0.001.heapprofile` (filename pattern matches V8's `--heap-prof` default). The driver's own log lands at `results/<timestamp>/inspector-driver.log`.
+- **Inspection:** Open the `.heapprofile` in Chrome DevTools (Memory tab → Load profile).
+- **Approximate duration:** ~35 seconds.
 
 ### `measure-event-loop-lag.sh` — Event-loop lag sampler
 
@@ -112,15 +112,27 @@ Every script launches the server with the literal command `node ../server.js &` 
 The lifecycle each script follows is:
 
 1. **Pre-flight check** — verify TCP port 3000 is free on `127.0.0.1`; abort with a clear operator message if not.
-2. **Launch** — `node ../server.js &` (or `node --cpu-prof ../server.js &` / `node --heap-prof ../server.js &` for the profiling scripts), then `pid=$!` to capture the child PID.
+2. **Launch** — `node ../server.js &` (for `run-baseline.sh`), `node --inspect=127.0.0.1:9229 ../server.js &` (for the profile scripts so the V8 Inspector socket is available for CDP-based profile capture), or `node ../server.js &` (for `measure-event-loop-lag.sh` since the lag sampler runs in a separate helper process). After launch, `pid=$!` captures the child PID.
 3. **Readiness probe** — poll `curl -s http://127.0.0.1:3000/` until it returns HTTP 200, or until a timeout fires. The startup log line `Server running at http://127.0.0.1:3000/` (per `[server.js:L12-L14]`) is an additional readiness signal that scripts may tail from server stdout.
-4. **Drive load** — invoke `npx autocannon` with the parameters for the active scenario.
-5. **Shutdown** — `kill -INT "$pid"` (`SIGINT`) so V8 flushes any pending profile files; `wait "$pid"` to reap the child.
-6. **Collect artifacts** — move/copy any emitted `*.cpuprofile` / `*.heapprofile` files into `results/<timestamp>/`.
+4. **Drive load** — invoke `npx autocannon` with the parameters for the active scenario. For the profile scripts, `inspector-driver.mjs` is launched in parallel with `autocannon` so the V8 CPU / heap profiler is sampling for the entirety of the autocannon load window.
+5. **Shutdown** — for `run-baseline.sh` and `measure-event-loop-lag.sh`: `kill -INT "$pid"` and `wait "$pid"` to reap the server cleanly. For the profile scripts: `inspector-driver.mjs` issues `Runtime.evaluate({expression: "process.exit(0)"})` via the V8 Inspector Protocol so the server exits gracefully without relying on signal-handling timing; the harness then runs `wait "$pid"`. SIGINT remains the fallback in the cleanup trap and is also used to reap the harness's own background subprocesses (the inspector driver and the event-loop-lag sampler).
+6. **Collect artifacts** — `inspector-driver.mjs` writes the `.cpuprofile` / `.heapprofile` directly to `results/<timestamp>/`. Other artifacts (autocannon JSON, manifests, server logs, sampler scripts) are written to that directory by the orchestrator scripts themselves.
+
+The four scripts share the same `trap` discipline. Each registers three handlers — `trap 'cleanup' EXIT`, `trap 'cleanup; exit 130' INT`, `trap 'cleanup; exit 143' TERM` — and the `cleanup` body is idempotent via a `CLEANUP_DONE` guard. This guarantees that a script interrupted by SIGINT exits with the canonical 130 code (signal 2) so CI / automation can distinguish operator interruption from clean completion; a script interrupted by SIGTERM exits 143; and a script that completes successfully exits 0. The previous trap pattern (`trap cleanup EXIT INT TERM` with `cleanup` ending in `exit "$rc"`) captured the exit code of the last completed command instead of the signal-induced exit code, so interrupted runs falsely reported 0 — this was QA Issue #3 and is fixed in the current revision.
+
+## V8 Inspector Protocol — Why It Replaces `--cpu-prof` / `--heap-prof`
+
+Earlier revisions of `profile-cpu.sh` and `profile-heap.sh` launched the server with V8's `--cpu-prof` / `--heap-prof` runtime flags and used `SIGINT` for shutdown. The V8 flags emit their profile artifacts only when the process exits *gracefully* — either by event-loop drain or by a `process.exit()` call — because the file write happens inside V8's `before-exit` / `exit` hooks. When SIGINT is delivered to a Node.js process that has installed no custom signal handler (which is exactly the state of `[server.js:L1-L14]` under Constraint **C-001**, the "Do not touch!" rule from `[README.md:L2]`), the default signal action terminates the process and the V8 exit hooks do NOT run. The result was that the previous profile scripts ran to completion, exited 0, and produced no `.cpuprofile` / `.heapprofile` artifact — QA found this empirically (Issues #1 and #2) and verified the V8 behavior with direct experiments.
+
+The current implementation replaces the V8 flags with the V8 Inspector Protocol. `node --inspect=127.0.0.1:9229 ../server.js` exposes V8's debugging interface on the loopback interface; the harness's `inspector-driver.mjs` helper connects via WebSocket and speaks the Chrome DevTools Protocol (CDP). The CDP `Profiler.stop` and `HeapProfiler.stopSampling` commands return the profile JSON synchronously over the inspector connection — no graceful-exit timing is required. After the driver has the profile bytes safely on disk, it issues `Runtime.evaluate({expression: "process.exit(0)"})` so the server exits cleanly. The output profile files use the same `CPU.<date>.<pid>.<id>.<seq>.cpuprofile` / `Heap.<date>.<pid>.<id>.<seq>.heapprofile` naming pattern that V8's flags would have produced, so Chrome DevTools, Speedscope, and any downstream tooling continue to work without changes.
+
+The driver uses **only** Node.js built-in modules (`node:net`, `node:crypto`, `node:http`, `node:fs`); the WebSocket protocol (RFC 6455) is implemented inline. This preserves Constraint **C-002**: the harness's only declared devDependency remains `autocannon` per `benchmarks/package.json`. The end-to-end mechanism — `--inspect` flag (a Node.js runtime flag, not a source modification) + the inspector-driver helper (lives entirely under `benchmarks/`) + the standard `Runtime.evaluate` CDP call — satisfies every governance constraint (C-001 through C-004) without relaxation.
+
+This is QA-recommended **Option C** ("READY — no constraint relaxation needed") from the QA report's resolution suggestions for Issues #1 and #2.
 
 ## Profiling Overhead
 
-The Node.js flags `--cpu-prof` and `--heap-prof` attach V8 sampling profilers to the process for the lifetime of the run. These profilers add measurable but bounded overhead to the profiled process: CPU sampling introduces a sub-millisecond interrupt at a fixed sampling rate, and heap profiling records a stack trace at each sampled allocation site. The latency and throughput numbers produced while these flags are active are therefore **profiled** numbers, not production numbers. Measurements taken with `run-baseline.sh` (which does **not** enable these flags) are the canonical baseline for latency and throughput; measurements taken with `profile-cpu.sh` or `profile-heap.sh` are interpretive — they identify where time and memory are spent, not how fast the unprofiled server runs. This labelling convention mirrors AAP §0.5.4.
+The V8 Inspector connection samples the running JavaScript stack at the configured sampling interval (100 µs for CPU profiles in the current driver configuration, well above the V8 default of 1 ms — set explicitly in `inspector-driver.mjs` to capture higher-resolution stacks against the static-response handler). The CPU sampler introduces a sub-millisecond interrupt at each tick; the heap sampler records a stack trace at each sampled allocation site (default 32768 bytes between samples). The latency and throughput numbers produced while these profilers are active are therefore **profiled** numbers, not production numbers. Measurements taken with `run-baseline.sh` (which uses a vanilla `node ../server.js` launch with no `--inspect` flag and no profiler attached) are the canonical baseline for latency and throughput; measurements taken with `profile-cpu.sh` or `profile-heap.sh` are interpretive — they identify where time and memory are spent, not how fast the unprofiled server runs. This labelling convention mirrors AAP §0.5.4.
 
 ## Known Gaps
 

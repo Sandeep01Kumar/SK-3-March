@@ -47,6 +47,8 @@
 #       autocannon, or curl)
 #   3 — port 3000 already bound (Assumption A-002, AAP §0.7)
 #   4 — server failed to become ready within the readiness timeout
+# 130 — interrupted by SIGINT (cleanup ran)
+# 143 — interrupted by SIGTERM (cleanup ran)
 #
 # Outputs (written to $RESULTS_DIR == benchmarks/results/<timestamp>/)
 # --------------------------------------------------------------------
@@ -99,6 +101,10 @@ INTER_RUNG_QUIESCE_S=2
 # Mutable PID slot — guarded in the cleanup trap (initialized empty so an
 # early-failure trap firing under `set -u` does not hit an unbound variable).
 SERVER_PID=""
+
+# Idempotency flag for the cleanup function — see "Cleanup trap" below for
+# the rationale.
+CLEANUP_DONE=0
 
 # ---------------------------------------------------------------------------
 # Pre-flight checks (Phase 3)
@@ -189,24 +195,36 @@ echo "Results directory: $RESULTS_DIR"
 # Cleanup trap (registered as part of Phase 5)
 #
 # Registered BEFORE the server is launched so an early-failure trap still
-# reaps any in-flight child process. SIGINT (NOT SIGKILL) is used so that
-# any pending V8 exit hooks run to completion — this is consistent with the
-# profiling scripts even though run-baseline.sh does not itself enable any
-# --*-prof flag (a future operator may swap the launch line; consistency
-# keeps the lifecycle invariant). The original $? is preserved through the
-# cleanup body so the final exit reflects the underlying script failure
-# rather than the success of the cleanup itself.
+# reaps any in-flight child process. SIGINT (NOT SIGKILL) is sent to the
+# child so the lifecycle convention is consistent with the profiling scripts
+# (a future operator may swap the launch line; consistency keeps the
+# lifecycle invariant).
+#
+# Issue #3 fix: the previous version used `trap cleanup EXIT INT TERM` with
+# the cleanup function ending in `exit "$rc"`. That captures the exit code
+# of whatever command ran immediately before the trap fired, NOT the signal-
+# induced exit code. The result was that a script interrupted via SIGINT
+# still exited 0, which silently misleads CI / automation that distinguishes
+# clean completion from operator interruption.
+#
+# The fix below splits the trap into three handlers — EXIT for normal exit
+# (preserves the underlying script's exit code), INT for SIGINT (exits 130
+# = 128+2), TERM for SIGTERM (exits 143 = 128+15). The cleanup body itself
+# is idempotent via the CLEANUP_DONE guard so the EXIT trap firing after an
+# INT/TERM trap does not double-reap an already-dead child.
 # ---------------------------------------------------------------------------
 cleanup() {
-  local rc=$?
+  if [ "${CLEANUP_DONE:-0}" -eq 1 ]; then return; fi
+  CLEANUP_DONE=1
   set +e
   if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
     kill -INT "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
-  exit "$rc"
 }
-trap cleanup EXIT INT TERM
+trap 'cleanup' EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 
 # ---------------------------------------------------------------------------
 # Launch server (Phase 5)

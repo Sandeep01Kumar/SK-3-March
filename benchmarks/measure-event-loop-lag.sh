@@ -67,6 +67,8 @@
 #   2 — pre-flight failure (missing node, server.js, or autocannon)
 #   3 — port 3000 already bound
 #   4 — server failed to become ready within $READINESS_TIMEOUT_S seconds
+# 130 — interrupted by SIGINT (cleanup ran)
+# 143 — interrupted by SIGTERM (cleanup ran)
 #
 # Outputs (written to $RESULTS_DIR == benchmarks/results/<timestamp>/)
 # --------------------------------------------------------------------
@@ -108,6 +110,10 @@ SAMPLER_SCRIPT="$RESULTS_DIR/sampler.mjs"
 # Mutable PID slots — guarded in the cleanup trap
 SERVER_PID=""
 SAMPLER_PID=""
+
+# Idempotency flag for the cleanup function — see "Cleanup trap" below for
+# the rationale.
+CLEANUP_DONE=0
 
 # ---------------------------------------------------------------------------
 # Pre-flight checks
@@ -368,11 +374,23 @@ echo "Sampler written to: $SAMPLER_SCRIPT"
 # ---------------------------------------------------------------------------
 # Cleanup trap — must be defined BEFORE the server is launched so an early
 # failure still cleans up the child process.
+#
+# Issue #3 fix: the previous version used `trap cleanup EXIT INT TERM` with
+# the cleanup function ending in `exit "$rc"`. That captures the exit code
+# of whatever command ran immediately before the trap fired, NOT the signal-
+# induced exit code. The result was that a script interrupted via SIGINT
+# still exited 0, which silently misleads CI / automation that distinguishes
+# clean completion from operator interruption.
+#
+# The fix below splits the trap into three handlers — EXIT for normal exit
+# (preserves the underlying script's exit code), INT for SIGINT (exits 130
+# = 128+2), TERM for SIGTERM (exits 143 = 128+15). The cleanup body itself
+# is idempotent via the CLEANUP_DONE guard so the EXIT trap firing after an
+# INT/TERM trap does not double-reap an already-dead child.
 # ---------------------------------------------------------------------------
 cleanup() {
-  # Capture and suppress the original exit code so each step below cannot abort
-  # cleanup partway through under set -e.
-  local rc=$?
+  if [ "${CLEANUP_DONE:-0}" -eq 1 ]; then return; fi
+  CLEANUP_DONE=1
   set +e
   if [ -n "${SAMPLER_PID:-}" ] && kill -0 "$SAMPLER_PID" 2>/dev/null; then
     kill -INT "$SAMPLER_PID" 2>/dev/null || true
@@ -382,9 +400,10 @@ cleanup() {
     kill -INT "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
-  exit "$rc"
 }
-trap cleanup EXIT INT TERM
+trap 'cleanup' EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 
 # ---------------------------------------------------------------------------
 # Launch server

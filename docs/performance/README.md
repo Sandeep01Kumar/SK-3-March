@@ -43,8 +43,8 @@ npm install
 The harness ships four scripts:
 
 - `run-baseline.sh` — latency/throughput baseline orchestrator. Drives `autocannon` against `http://127.0.0.1:3000/` across the concurrency ladder defined in `load-profile.json`.
-- `profile-cpu.sh` — V8 CPU profile capture. Wraps `node --cpu-prof ../server.js` under sustained load and collects the emitted `*.cpuprofile`.
-- `profile-heap.sh` — V8 heap profile capture. Wraps `node --heap-prof ../server.js` under sustained load and collects the emitted `*.heapprofile`.
+- `profile-cpu.sh` — V8 CPU profile capture. Launches the server with `node --inspect=127.0.0.1:9229 ../server.js` and drives the V8 sampling CPU profiler over the Chrome DevTools Protocol via `inspector-driver.mjs` (CDP `Profiler.start` → wait → `Profiler.stop`) while autocannon applies sustained load; writes the emitted `CPU.<YYYYMMDD>.<HHMMSS>.<server_pid>.0.001.cpuprofile`. See chapter 03's "V8 Inspector Protocol — Why It Replaces `--cpu-prof` / `--heap-prof`" section for the rationale.
+- `profile-heap.sh` — V8 heap profile capture. Same mechanism as `profile-cpu.sh` but in heap mode (CDP `HeapProfiler.startSampling` → wait → `HeapProfiler.stopSampling`); writes the emitted `Heap.<YYYYMMDD>.<HHMMSS>.<server_pid>.0.001.heapprofile`.
 - `measure-event-loop-lag.sh` — event-loop lag sampler. Drives sustained load while sampling event-loop delay via `perf_hooks.monitorEventLoopDelay()` and emits CSV.
 
 Each invocation creates a fresh `../../benchmarks/results/<unix-timestamp>/` directory containing the artifacts produced by that run. Chapters 04–07 cite these artifacts by relative path.
