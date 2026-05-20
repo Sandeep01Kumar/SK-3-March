@@ -1,0 +1,36 @@
+# benchmarks/.gitignore
+#
+# Enforces the AAP §0.8.2 / §0.6.2 constraints on the harness package:
+#   - Binary profile artifacts (`*.cpuprofile`, `*.heapprofile`) MUST NOT be
+#     committed — they are environment-specific (host CPU, kernel, Node.js
+#     minor version) and may be very large.
+#   - Timestamped result subdirectories under `results/` MUST NOT be
+#     committed — every timestamped run produces its own subdirectory, and
+#     only the `results/.gitkeep` sentinel that reserves the parent
+#     directory is tracked.
+#   - `node_modules/` MUST NOT be committed — `npm install` resolves the
+#     harness's single declared devDependency (`autocannon`) from
+#     `package-lock.json`, which IS committed (AAP §0.4.1 — "the implementing
+#     agent will produce `benchmarks/package-lock.json` at execution time
+#     and that lockfile becomes the authoritative version record").
+#
+# This file lives only inside `benchmarks/`. It does not affect the
+# application package at the repository root — `[server.js]`,
+# `[package.json]`, `[package-lock.json]`, and `[README.md]` are immutable
+# per Constraint C-001 (`[README.md:L2]`, `[Section 2.6.2]`) and are not
+# referenced from this file.
+
+# Harness dependency tree — installed by `npm install` from package-lock.json
+node_modules/
+
+# Timestamped result directories — every harness invocation writes one.
+# Match both forms produced by the scripts:
+#   results/<unix-epoch-seconds>/  (e.g., results/1779303391/)
+#   results/<utc-iso-basic>/       (e.g., results/20260520T190102Z/)
+# The negation rules at the bottom preserve the .gitkeep sentinel that
+# reserves the directory itself.
+results/*
+
+# Preserve the directory placeholder so the empty `results/` folder is
+# tracked even when no run output exists.
+!results/.gitkeep
